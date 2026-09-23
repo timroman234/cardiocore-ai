@@ -27,6 +27,12 @@ Without an API key everything works except the "Ask Claude tutor" button.
 | Domain gap | The classifier is trained on synthetic data only; on real records it can be confidently wrong |
 | AI tutor | *Ask Claude tutor* returns a structured lesson (summary, waves, mechanism, red flags, quiz) |
 
+## Learn with it
+
+**New to time-series data or EKGs?** Read the illustrated [Student Guide](docs/STUDENT_GUIDE.md): EKG basics,
+the time-series checklist, how each part of the app works, the AI agent workflow, how real devices differ,
+and step-by-step labs (including "how does AFib work?").
+
 ## Layout
 
 ```
@@ -37,6 +43,7 @@ src/agent.py        Claude tutor: Pydantic schema + structured output via messag
 src/app.py          Streamlit dashboard
 src/styles.py       IBM Carbon dark theme (from the /carbon-streamlit skill)
 tests/              pytest suite
+docs/               Student guide, design spec, figure generator (docs/make_figures.py)
 ```
 
 Read the code comments: every module explains the maths and the reasoning (Gaussian wave model,
