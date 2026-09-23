@@ -232,9 +232,7 @@ with right:
     pred = model.predict(f, bundle)
     color = CLASS_COLORS.get(pred.label, THEME["primary"])
     truth_line = f"annotated / true label: {rec.label}" if rec.label else ""
-    st.markdown(f'<div class="badge" style="--c:{color}"><div class="b-title">{pred.label.upper()} '
-                f'({pred.confidence:.0%})</div><div class="b-sub">Random Forest verdict &middot; {truth_line}</div></div>',
-                unsafe_allow_html=True)
+    badge_slot = st.empty()   # filled after the tutor panel runs, so it can show "lesson is stale"
 
     panel = st.container(key="agent_panel")
     with panel:
@@ -319,11 +317,23 @@ with right:
             st.caption(f"Random Forest trained on {bundle['n_train']} synthetic windows, hold-out accuracy "
                        f"{bundle['accuracy']:.0%} on synthetic data.")
             if rec.source == "mitbih":
-                agree = "agrees with" if pred.label == rec.label else "DISAGREES with"
-                st.info(f"Domain gap: on this real recording the synthetic-trained model {agree} the "
-                        f"annotation-derived label ({rec.label}). Real ECGs are messier than our model of them.")
+                if pred.label == rec.label:
+                    st.success(f"On this real recording the synthetic-trained model agrees with the "
+                               f"annotation-derived label ({rec.label}).")
+                else:
+                    st.info(f"Domain gap: on this real recording the synthetic-trained model DISAGREES with "
+                            f"the annotation-derived label ({rec.label}). Real ECGs are messier than our "
+                            f"model of them.")
             top = sorted(bundle["importances"].items(), key=lambda kv: -kv[1])[:4]
             st.caption("Most informative features: " + ", ".join(f"{k} ({v:.0%})" for k, v in top))
+
+    # Badge (top of the right column). It stays visible while the panel below scrolls, so it is
+    # also where we warn that the tutor's lesson belongs to an earlier signal.
+    stale = result is not None and not result.error and shown_key != key
+    stale_note = " &middot; <b style='color:%s'>tutor lesson is from an earlier signal</b>" % THEME["warning"] if stale else ""
+    badge_slot.markdown(f'<div class="badge" style="--c:{color}"><div class="b-title">{pred.label.upper()} '
+                        f'({pred.confidence:.0%})</div><div class="b-sub">Random Forest verdict &middot; '
+                        f'{truth_line}{stale_note}</div></div>', unsafe_allow_html=True)
 
 st.markdown('<div class="disclaimer">Educational simulation only. Not a medical device; never use for real '
             'diagnosis or triage.</div>', unsafe_allow_html=True)

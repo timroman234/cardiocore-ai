@@ -110,7 +110,8 @@ def _gaussian(t: np.ndarray, amp: float, mu: float, sigma: float) -> np.ndarray:
     return amp * np.exp(-((t - mu) ** 2) / (2.0 * sigma**2))
 
 
-def _beat_schedule(rhythm: str, bpm: float, duration_s: float, rng: np.random.Generator):
+def _beat_schedule(rhythm: str, bpm: float, duration_s: float, rng: np.random.Generator,
+                   pvc_interval: tuple[int, int] = (3, 6)):
     """
     Decide *when* each beat happens.  Returns (times, types, rr_before), where rr_before[k] is the
     interval that preceded beat k.  The rhythm is defined by how these intervals behave:
@@ -122,11 +123,13 @@ def _beat_schedule(rhythm: str, bpm: float, duration_s: float, rng: np.random.Ge
       PVC   NSR with an occasional early beat.  The PVC arrives at ~60% of the normal RR and is
             followed by a compensatory pause (~140%) so the *next* normal beat stays on the
             sinus node's original schedule: 0.6 + 1.4 = 2.0 normal intervals.
+            `pvc_interval=(lo, hi)` picks how many beats separate PVCs: (3, 6) is occasional
+            ectopy, while lo=2 gives *bigeminy* (normal, PVC, normal, PVC ... : half the beats).
     """
     mean_rr = 60.0 / bpm
     t = float(rng.uniform(0.3, 0.6))          # time of the first R peak
     times, types, rr_before = [t], ["N"], [mean_rr]
-    until_pvc = int(rng.integers(3, 6))       # beats until the next premature one
+    until_pvc = int(rng.integers(*pvc_interval))  # beats until the next premature one
     owe_pause = False
 
     while t < duration_s + 1.0:               # generate one extra second so the window edge is filled
@@ -142,7 +145,7 @@ def _beat_schedule(rhythm: str, bpm: float, duration_s: float, rng: np.random.Ge
                 until_pvc -= 1
                 if until_pvc == 0:
                     rr, kind = 0.60 * rr, "V"
-                    until_pvc = int(rng.integers(3, 6))
+                    until_pvc = int(rng.integers(*pvc_interval))
                     owe_pause = True
                 elif owe_pause:
                     rr *= 1.40
@@ -162,6 +165,8 @@ def synthesize_ecg(
     wander_mv: float = 0.15,
     rhythm: str = "NSR",
     seed: int | None = None,
+    pvc_interval: tuple[int, int] = (3, 6),
+    p_scale: float = 1.0,
 ) -> EcgRecord:
     """
     Build a synthetic single-lead (Lead II-like) ECG.
@@ -173,6 +178,9 @@ def synthesize_ecg(
     wander_mv   amplitude of 0.5 Hz baseline wander (breathing moves the chest and the electrodes)
     rhythm      "NSR", "AFib" or "PVC"
     seed        makes the "random" signal reproducible
+    pvc_interval  (PVC rhythm only) range of beats between premature beats; see _beat_schedule
+    p_scale     multiplies the P-wave amplitude (1 = textbook, 0 = no visible P wave).  Real Lead II
+                traces often have a small or hidden P wave, so training data should include that.
     """
     if rhythm not in RHYTHMS:
         raise ValueError(f"rhythm must be one of {RHYTHMS}")
@@ -180,7 +188,7 @@ def synthesize_ecg(
     n = int(round(duration_s * fs))
     t = np.arange(n) / fs                     # sample n happens at time n / Fs
 
-    beat_t, beat_kind, rr_before = _beat_schedule(rhythm, bpm, duration_s, rng)
+    beat_t, beat_kind, rr_before = _beat_schedule(rhythm, bpm, duration_s, rng, pvc_interval)
 
     # ---- 1. Superpose the Gaussian waves of every beat --------------------------------------
     clean = np.zeros(n)
@@ -199,6 +207,8 @@ def synthesize_ecg(
         seg = t[lo:hi]
         for name, (amp, mu, sigma) in waves.items():
             offset = mu * scale if name in ("P", "T") else mu
+            if name == "P":
+                amp = amp * p_scale
             clean[lo:hi] += _gaussian(seg, amp, tk + offset, sigma)
 
     # AFib also shows fibrillatory "f-waves": a small, chaotic 4-8 Hz ripple on the baseline.
@@ -261,9 +271,15 @@ _BEAT_SYMBOLS = set("NLRBAaJSVrFejnE/fQ")
 _DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 
 
-def _infer_label(symbols: list[str], aux: list[str], bpm: float) -> str:
-    """Summarise a real slice with one of our classes, using the annotations."""
-    if any(a.strip("\x00").startswith("(AFIB") for a in aux):
+def _infer_label(symbols: list[str], rhythms: list[str], bpm: float) -> str:
+    """
+    Summarise a real slice with one of our classes, using the cardiologists' annotations.
+
+    `rhythms` are the rhythm labels in effect during the slice, e.g. "(AFIB".  PhysioNet marks a
+    rhythm only where it CHANGES, so a slice in the middle of an AF episode contains no marker at
+    all: the caller must carry the last marker from before the slice forward (see load_mitbih).
+    """
+    if any(r.startswith("(AFIB") for r in rhythms):
         return "Atrial Fibrillation"
     if symbols and symbols.count("V") / len(symbols) >= 0.08:
         return "PVC"
@@ -280,36 +296,37 @@ def load_mitbih(record: str = "100", start_s: float | None = None, duration_s: f
     start_s = float(MITBIH_RECORDS.get(record, {}).get("start_s", 0) if start_s is None else start_s)
     cache = _DATA_DIR / f"mitdb_{record}_{start_s:g}_{duration_s:g}.npz"
 
-    if cache.exists():
-        z = np.load(cache, allow_pickle=False)
+    z = np.load(cache, allow_pickle=False) if cache.exists() else None
+    if z is not None and "rhythms" in z.files:      # (older caches lack rhythm state: refetch)
         signal, fs = z["signal"], float(z["fs"])
-        beat_samples, symbols, aux = z["beat_samples"], list(z["symbols"]), list(z["aux"])
+        beat_samples, symbols, rhythms = z["beat_samples"], list(z["symbols"]), list(z["rhythms"])
     else:
         info = wfdb.rdheader(record, pn_dir="mitdb")
         fs = float(info.fs)
         lo, hi = int(start_s * fs), int((start_s + duration_s) * fs)
         rec = wfdb.rdrecord(record, pn_dir="mitdb", sampfrom=lo, sampto=hi, channels=[0])
-        ann = wfdb.rdann(record, "atr", pn_dir="mitdb", sampfrom=lo, sampto=hi)
+        # Read the WHOLE annotation file once: we need rhythm markers from before the slice.
+        ann = wfdb.rdann(record, "atr", pn_dir="mitdb")
         signal = rec.p_signal[:, 0].astype(float)
-        # wfdb returns annotation sample numbers relative to the start of the file; shift them
-        # so they index into our slice.
         samples = np.asarray(ann.sample)
-        if samples.size and samples.min() >= lo:
-            samples = samples - lo
-        keep = [i for i, s in enumerate(ann.symbol) if s in _BEAT_SYMBOLS]
-        beat_samples = samples[keep]
-        symbols = [ann.symbol[i] for i in keep]
-        aux = [(a or "") for a in ann.aux_note]
+        inside = (samples >= lo) & (samples < hi)
+        beat_idx = [i for i in np.flatnonzero(inside) if ann.symbol[i] in _BEAT_SYMBOLS]
+        beat_samples = samples[beat_idx] - lo       # re-index so they line up with our slice
+        symbols = [ann.symbol[i] for i in beat_idx]
+        # Rhythm in effect: the last marker at/before the slice start + any change inside the slice.
+        marks = [(int(s_), a.strip("\x00")) for s_, a in zip(samples, ann.aux_note) if a]
+        before = [a for s_, a in marks if s_ <= lo]
+        rhythms = before[-1:] + [a for s_, a in marks if lo < s_ < hi]
         _DATA_DIR.mkdir(exist_ok=True)
         np.savez_compressed(cache, signal=signal, fs=fs, beat_samples=beat_samples,
-                            symbols=np.array(symbols), aux=np.array(aux))
+                            symbols=np.array(symbols), rhythms=np.array(rhythms if rhythms else [""]))
 
     t = np.arange(len(signal)) / fs
     bpm = 60.0 / np.diff(beat_samples / fs).mean() if len(beat_samples) > 1 else 0.0
     return EcgRecord(
         t=t, signal=signal, fs=fs, beat_times=beat_samples / fs,
         beat_types=["V" if s == "V" else "N" for s in symbols],
-        label=_infer_label(symbols, aux, bpm), source="mitbih",
+        label=_infer_label(symbols, rhythms, bpm), source="mitbih",
         description=f"MIT-BIH record {record}: {MITBIH_RECORDS.get(record, {}).get('desc', '')}",
         params=dict(record=record, start_s=start_s, duration_s=duration_s),
     )

@@ -80,10 +80,24 @@ _RECIPES = {
 }
 
 
+# How often PVCs occur is itself variable in patients: an isolated one now and then, every third
+# beat (trigeminy), or every other beat (bigeminy).  Training on only "occasional" PVCs made the
+# model mistake heavy ectopy (e.g. MIT-BIH record 208: >50% ectopic beats) for atrial fibrillation.
+_PVC_BURDENS = [(2, 3), (2, 4), (3, 6), (4, 9)]   # ranges of "beats between PVCs" (lo, hi)
+
+# Likewise the P wave: textbook amplitude, weakened, or invisible.  Real single-lead recordings
+# (e.g. MIT-BIH record 208) often show no detectable P wave even in non-AF rhythms.  Without this the
+# model learned the shortcut "no P wave + irregular = AFib" and mislabelled heavy ectopy.  What
+# separates PVC from AFib is the fraction of WIDE beats, which the forest must now rely on.
+_PVC_P_SCALES = [1.0, 1.0, 0.4, 0.0]
+
+
 def _one_window(cls: str, seed: int) -> np.ndarray:
     """Generate one randomised labelled window and return its feature row."""
     rng = np.random.default_rng(seed)
     rhythm, (lo, hi) = _RECIPES[cls]
+    pvc_interval = _PVC_BURDENS[int(rng.integers(len(_PVC_BURDENS)))]
+    p_scale = _PVC_P_SCALES[int(rng.integers(len(_PVC_P_SCALES)))] if rhythm == "PVC" else 1.0
     rec = synthesize_ecg(
         bpm=float(rng.uniform(lo, hi)),
         duration_s=float(rng.uniform(10, 20)),
@@ -92,6 +106,8 @@ def _one_window(cls: str, seed: int) -> np.ndarray:
         wander_mv=float(rng.uniform(0.0, 0.3)),
         rhythm=rhythm,
         seed=int(rng.integers(0, 2**31 - 1)),
+        pvc_interval=pvc_interval,
+        p_scale=p_scale,
     )
     return feature_vector(analyze(rec.signal, rec.fs).features)
 

@@ -116,8 +116,8 @@ def get_carbon_css(theme: dict[str, str] | None = None) -> str:
 
     /* Right-hand agent panel: fixed height, scrolls internally so the PAGE never scrolls. */
     .st-key-agent_panel {{
-        height: calc(100vh - 8.4rem) !important; max-height: calc(100vh - 8.4rem) !important;
-        overflow-y: auto !important; padding-right: 0.4rem;
+        height: calc(100vh - 8.9rem) !important; max-height: calc(100vh - 8.9rem) !important;
+        overflow-y: auto !important; padding-right: 0.4rem; margin-top: 0.5rem;
     }}
     .st-key-agent_panel::-webkit-scrollbar {{ width: 6px; }}
     .st-key-agent_panel::-webkit-scrollbar-thumb {{ background: {t["bg_tertiary"]}; }}

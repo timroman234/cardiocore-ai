@@ -62,3 +62,6 @@ uv run pytest -m live            # one real Claude API call (needs the key)
 - Single lead (Lead II equivalent), 10-30 s windows.
 - PR / QRS / QT values are simple heuristics, shown as estimates.
 - The classifier is trained on synthetic data by design; see the domain-gap note in the app.
+  On the four bundled MIT-BIH records it gets 11 of 12 test slices right. The miss is record 100 at 0 s,
+  a normal rhythm with one premature *atrial* beat that the model reads as a PVC: it has no
+  atrial-ectopy class. Good discussion material.

@@ -59,3 +59,20 @@ def test_afib_is_irregular_and_pvc_has_wide_beats():
 def test_labels_follow_rate_for_sinus_rhythm(bpm, label):
     assert synthesize_ecg(bpm=bpm, seed=6).label == label
     assert label in CLASSES
+
+
+def test_pvc_interval_controls_ectopic_burden():
+    share = lambda r: r.beat_types.count("V") / len(r.beat_types)
+    occasional = synthesize_ecg(bpm=75, duration_s=30, rhythm="PVC", seed=8)              # default (3, 6)
+    bigeminy = synthesize_ecg(bpm=75, duration_s=30, rhythm="PVC", seed=8, pvc_interval=(2, 3))
+    assert share(occasional) < 0.3
+    assert share(bigeminy) > 0.4
+    # bigeminy alternates normal / premature beats
+    assert bigeminy.beat_types[3:9] in (["V", "N"] * 3, ["N", "V"] * 3)
+
+
+def test_p_scale_removes_p_wave_energy():
+    kw = dict(bpm=60, duration_s=10, snr_db=np.inf, wander_mv=0, seed=9)
+    full, none = synthesize_ecg(**kw), synthesize_ecg(p_scale=0.0, **kw)
+    idx = int(round(full.beat_times[3] * full.fs)) - int(0.16 * full.fs)   # where the P wave sits
+    assert full.signal[idx] > 0.1 and abs(none.signal[idx]) < 0.02
