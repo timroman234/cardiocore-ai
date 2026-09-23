@@ -26,6 +26,7 @@ load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 import agent  # noqa: E402  (after load_dotenv so the API key is in the environment)
 import model  # noqa: E402
 from dsp import analyze, score_detection  # noqa: E402
+from monitor import monitor_html, monitor_payload  # noqa: E402
 from signal_gen import MITBIH_RECORDS, load_mitbih, synthesize_ecg  # noqa: E402
 from styles import CLASS_COLORS, THEME, get_carbon_css  # noqa: E402
 
@@ -149,12 +150,12 @@ def fmt(v, unit="", digits=0) -> str:
 st.session_state.setdefault("seed", 42)
 st.session_state.setdefault("lessons", {})
 
-h1, h2, h3 = st.columns([0.42, 0.30, 0.28], vertical_alignment="center")
+h1, h2, h3 = st.columns([0.30, 0.42, 0.28], vertical_alignment="center")
 with h1:
     st.markdown("# CardioCore AI")
     st.markdown('<div class="subtitle">Time-series cardiac analyzer &amp; agentic diagnostic tutor</div>', unsafe_allow_html=True)
 with h2:
-    view = st.segmented_control("View", ["ECG", "Pan-Tompkins stages"], default="ECG",
+    view = st.segmented_control("View", ["ECG", "Live replay", "Pan-Tompkins stages"], default="ECG",
                                 label_visibility="collapsed", key="view") or "ECG"
 with h3:
     mode = st.segmented_control("Data source", ["Synthetic", "MIT-BIH (real)"], default="Synthetic",
@@ -199,18 +200,21 @@ with left:
         st.stop()
 
     with chart_slot:
-        if view == "ECG":
+        if view == "Live replay":
+            # Animated bedside-monitor view, drawn in the browser (see monitor.py). Same height as the
+            # ECG chart + its checkbox row, so the page layout does not jump when switching views.
+            st.iframe(monitor_html(monitor_payload(rec, a), height=CHART_HEIGHT + 42), height=CHART_HEIGHT + 42)
+        elif view == "ECG":
             show_raw = st.session_state.get("show_raw", True)
             show_truth = st.session_state.get("show_truth", False)
             st.plotly_chart(ecg_figure(rec, a, show_raw, show_truth), width="stretch",
                             config=dict(displaylogo=False, modeBarButtonsToRemove=["select2d", "lasso2d", "autoScale2d"]))
-        else:
-            st.plotly_chart(pipeline_figure(rec, a), width="stretch", config=dict(displaylogo=False))
-        if view == "ECG":
             t1, t2, t3 = st.columns([0.2, 0.2, 0.6], vertical_alignment="center")
             t1.checkbox("Raw", value=True, key="show_raw")
             t2.checkbox("True beats", value=False, key="show_truth")
             t3.caption(rec.description)
+        else:
+            st.plotly_chart(pipeline_figure(rec, a), width="stretch", config=dict(displaylogo=False))
 
     f = a.features
     m = st.columns(6)

@@ -47,3 +47,14 @@ def test_tutor_without_api_key_shows_setup_message(monkeypatch):
     at.button(key="ask").click().run()
     assert not at.exception, at.exception
     assert any(".env" in e.value for e in at.error), [e.value for e in at.error]
+
+
+def test_live_replay_view_renders_the_animation_iframe():
+    at = AppTest.from_file(APP, default_timeout=120)
+    at.session_state["view"] = "Live replay"
+    at.run()
+    assert not at.exception, at.exception
+    frames = at.get("iframe")
+    assert frames, "no iframe element was rendered"
+    assert "requestAnimationFrame" in frames[0].proto.srcdoc
+    assert "NSR" in _badge(at)              # the rest of the dashboard still works

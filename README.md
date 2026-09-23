@@ -22,6 +22,7 @@ Without an API key everything works except the "Ask Claude tutor" button.
 | Area | Try this |
 |---|---|
 | Synthetic ECG | Sweep heart rate 40-180 bpm, lower the SNR to 5 dB and watch peak detection degrade, inject AFib or PVCs |
+| Live replay | Switch the view to *Live replay* for an animated bedside-monitor sweep with beat markers, a rolling bpm readout and optional beep |
 | Pan-Tompkins | Switch the view to *Pan-Tompkins stages* to see band-pass, derivative, squaring and integration |
 | Real ECG | Switch to *MIT-BIH (real)*: detection is scored against cardiologist annotations |
 | Domain gap | The classifier is trained on synthetic data only; on real records it can be confidently wrong |
@@ -37,6 +38,7 @@ and step-by-step labs (including "how does AFib work?").
 
 ```
 src/signal_gen.py   Gaussian-superposition ECG generator + MIT-BIH (wfdb) loader
+src/monitor.py      "Live replay": canvas animation of the analysed window (replay, not real-time processing)
 src/dsp.py          Butterworth band-pass, Pan-Tompkins, HRV, QRS/PR/QT estimates, Welch PSD
 src/model.py        Random Forest rhythm classifier (5 classes), synthetic training set
 src/agent.py        Claude tutor: Pydantic schema + structured output via messages.parse

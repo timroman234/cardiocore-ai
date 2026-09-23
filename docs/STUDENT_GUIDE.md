@@ -4,7 +4,7 @@
 > data, and you have never read an EKG. By the end you will know what this app does, why each tool
 > is in it, and how a real heart monitor differs from it.
 >
-> **Reading time:** about 30 minutes. **Hands-on labs:** about 45 minutes.
+> **Reading time:** about 30 minutes. **Hands-on labs:** about 50 minutes.
 >
 > **Important:** this is a teaching simulation, **not a medical device**. Never use it to judge a real person's health.
 
@@ -191,7 +191,7 @@ The most common way beginners fool themselves in machine learning:
   **PPV / precision** (of the alarms we raised, how many were real?).
 - **Fake data flatters you.** Our classifier scores **100%** on synthetic test data. On real patient
   recordings it is right on 11 of 12 slices we tried. Same model, real world: humbling. This is called
-  **distribution shift** or the "domain gap", and you can see it live in the app (Lab 6).
+  **distribution shift** or the "domain gap", and you can see it live in the app (Lab 7).
 
 ### 3.7 Labels have context
 
@@ -259,9 +259,10 @@ flowchart TD
 | **wfdb** | Reads real recordings from PhysioNet | The standard library for that data format |
 | **Streamlit** | The interactive web dashboard | Build a UI in pure Python; sliders re-run the analysis instantly |
 | **Plotly** | Zoomable charts | Interactive time-series plots |
+| **HTML canvas + JavaScript** | The "Live replay" bedside-monitor animation | Runs in the browser at ~60 frames per second, so Python isn't re-run on every frame |
 | **Anthropic SDK + Pydantic** | Talk to Claude and validate its answer | Typed, checked, structured responses |
 | **python-dotenv** | Loads your API key from `.env` | Keeps secrets out of the code |
-| **pytest** | 54 automated tests | Signal code fails silently, so tests are how you know it works |
+| **pytest** | 62 automated tests | Signal code fails silently, so tests are how you know it works |
 
 ### Step 1: Get the signal (`signal_gen.py`)
 
@@ -430,6 +431,8 @@ or wearable has a different problem: **the data never stops, and it must react n
 **Analogy: editing a film vs live TV.** Editing lets you rewind, look ahead and fix mistakes. Live TV
 shows the moment as it happens: you can't rewind, and a delay of 30 seconds is a failure.
 
+**Want to see the difference for yourself?** Lab 5 uses the app's **Live replay** view to make a stored recording *look* like a live monitor, and then shows why it is only a replay.
+
 ### The live data path
 
 ```text
@@ -482,7 +485,7 @@ thoroughly tested code.
 
 ```text
 +-------------------------------------------------------------------------------+
-| CardioCore AI      [ ECG | Pan-Tompkins stages ]        [ Synthetic | MIT-BIH ]|
+| CardioCore AI   [ ECG | Live replay | Pan-Tompkins stages ]   [ Synthetic | MIT-BIH ]|
 +-------------------------------------------------+-----------------------------+
 |  CHART (blue = filtered, grey = raw,            | [ AFIB (100%) ]  <- verdict |
 |         green triangles = detected R peaks)     |  Analysis | ECG Physics     |
@@ -530,7 +533,20 @@ Now drag **Heart rate** to 45, then 150. The badge changes to **Sinus Bradycardi
 
 Click **Pan-Tompkins stages** above the chart. Compare the four stacked plots to the diagram in section 4. See how the messy signal at the top becomes clean hills at the bottom. Now lower the SNR and watch the hills at the bottom: which stage fails first?
 
-### Lab 5: Meet a PVC (5 min)
+### Lab 5: Watch it like a bedside monitor (5 min)
+
+Click **Live replay** above the chart. The trace now sweeps across the screen like a hospital monitor.
+
+1. **Follow the bright dot.** It is the *sweep cursor*. The line behind it is what has been "recorded", and the short blank gap just ahead is the *eraser* that wipes the old sweep. The screen is 5 seconds wide.
+2. **Watch the green triangles** appear just as the cursor passes each heartbeat, and the **bpm readout** update with a pulse on every beat. The number is a *rolling* rate from the last few beats.
+3. Press **Speed** to slow to 0.5x and watch a single beat closely: the small P bump, the sharp QRS, the T bump.
+4. Turn **Sound on** for a beep on every beat (browsers only allow audio after you click, which is why it starts off).
+5. Now switch **Inject arrhythmia** to **Atrial fibrillation** and watch again. What happens to the beeps? *(They lose their rhythm: you can hear the irregularity.)*
+6. Switch to **PVC**. Can you spot the early, tall, odd-shaped beat as it sweeps past, and the longer pause after it?
+
+**Important question:** is this really live? *No. It is a replay.* The window was already recorded, filtered and analysed, and the animation just plays it back. The note under the chart says so. In a real monitor the beats are detected *as they arrive*, using a filter that can only look at the past, so a beat is confirmed slightly *after* it happens. Compare this with section 6.
+
+### Lab 6: Meet a PVC (5 min)
 
 Choose **PVC (premature beats)**. Look for:
 - A beat that arrives **early**, is **taller and wider**, and often points the *other way* afterwards.
@@ -540,7 +556,7 @@ Choose **PVC (premature beats)**. Look for:
 
 Question: *why can't the classifier just use heart rate to spot a PVC?* (Answer: the average rate looks normal. It's the shape and timing of individual beats that give it away.)
 
-### Lab 6: Real patients and the domain gap (10 min)
+### Lab 7: Real patients and the domain gap (10 min)
 
 Switch **Data source** to **MIT-BIH (real)**. Now the signals are real people. Read the small line under the badge: **"annotated / true label"** is what cardiologists marked.
 
@@ -564,6 +580,7 @@ Questions:
 4. If a monitor's beat detector missed 1 in 10 beats, what would happen to the heart rate it shows?
 5. Why does the AI tutor get a fact sheet instead of the waveform?
 6. Why is "100% test accuracy" on synthetic data almost meaningless?
+7. The Live replay view marks each beat exactly when the cursor reaches it. Why would a real monitor's markers appear slightly *late*?
 
 ---
 
@@ -602,6 +619,7 @@ This project hit real time-series problems while being built. They are the best 
 | **AFib** | Atrial fibrillation: chaotic atria, irregular pulse, no P waves |
 | **PVC** | Premature ventricular contraction: an early, wide beat |
 | **Pan-Tompkins** | Classic real-time R-peak detection algorithm |
+| **Sweep cursor / replay** | The moving dot on a bedside monitor that redraws the trace left to right. In this app it *replays* a finished window rather than processing live data |
 | **Random Forest** | Many small decision trees voting |
 | **Distribution shift / domain gap** | When real data differs from the training data |
 | **Sensitivity / PPV** | Share of real events caught / share of alarms that were real |
