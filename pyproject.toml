@@ -1,0 +1,32 @@
+[project]
+name = "cardiocore-ai"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "anthropic>=1.8.0",
+    "joblib>=1.6.0",
+    "numpy>=2.5.3",
+    "pandas>=3.0.6",
+    "plotly>=7.1.0",
+    "pydantic>=2.13.5",
+    "python-dotenv>=1.2.3",
+    "scikit-learn>=1.9.1",
+    "scipy>=1.18.1",
+    "streamlit>=1.64.0",
+    "wfdb>=4.3.1",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+markers = [
+    "network: needs internet (PhysioNet download)",
+    "live: makes a real Anthropic API call (needs ANTHROPIC_API_KEY)",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]
